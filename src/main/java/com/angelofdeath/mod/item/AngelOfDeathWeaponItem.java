@@ -81,7 +81,7 @@ public class AngelOfDeathWeaponItem extends Item {
     }
 
     @Override
-    public int getUseDuration(ItemStack stack) {
+    public int getUseDuration(ItemStack stack, LivingEntity entity) {
         return 72000;
     }
 
@@ -95,7 +95,7 @@ public class AngelOfDeathWeaponItem extends Item {
         if (level.isClientSide || !(entity instanceof ServerPlayer player)) {
             return;
         }
-        int heldTicks = getUseDuration(stack) - timeLeft;
+        int heldTicks = getUseDuration(stack, entity) - timeLeft;
         if (getMode(stack) == MODE_GREY_HOLE && heldTicks >= FUSION_TICKS) {
             SingularityActions.spawnFromPlayer(player, stack);
         }
