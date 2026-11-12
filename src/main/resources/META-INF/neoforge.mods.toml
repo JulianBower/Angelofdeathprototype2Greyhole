@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="angelofdeath"
+version="1.0.0"
+displayName="The Angel of Death"
+description='''
+A singularity-wielding weapon. Hold Right-Click to channel a Black Hole, White Hole or the fused Grey Hole,
+and Left-Click while channeling to place it up to 40 blocks away.
+'''
+
+[[dependencies.angelofdeath]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.angelofdeath]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "CNC",
+    "OSO",
+    " S "
+  ],
+  "key": {
+    "C": { "item": "minecraft:end_crystal" },
+    "N": { "item": "minecraft:nether_star" },
+    "O": { "item": "minecraft:obsidian" },
+    "S": { "item": "minecraft:netherite_ingot" }
+  },
+  "result": {
+    "id": "angelofdeath:angel_of_death",
+    "count": 1
+  }
+}

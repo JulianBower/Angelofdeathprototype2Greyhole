@@ -1,0 +1,21 @@
+{
+  "item.angelofdeath.angel_of_death": "The Angel of Death",
+  "itemGroup.angelofdeath": "The Angel of Death",
+  "entity.angelofdeath.singularity": "Singularity",
+  "key.angelofdeath.switch_mode": "Switch Singularity Mode",
+  "key.categories.angelofdeath": "The Angel of Death",
+  "message.angelofdeath.mode.black_hole": "Mode: Black Hole",
+  "message.angelofdeath.mode.white_hole": "Mode: White Hole",
+  "message.angelofdeath.mode.grey_hole": "Mode: Grey Hole",
+  "message.angelofdeath.power": "Singularity Power: %s / 5",
+  "message.angelofdeath.fusion_incomplete": "The singularities have not fused yet",
+  "tooltip.angelofdeath.mode": "Mode: %s",
+  "tooltip.angelofdeath.mode.black_hole": "Black Hole",
+  "tooltip.angelofdeath.mode.white_hole": "White Hole",
+  "tooltip.angelofdeath.mode.grey_hole": "Grey Hole",
+  "tooltip.angelofdeath.power": "Singularity Power: %s / 5",
+  "tooltip.angelofdeath.hint.switch": "Press X to switch singularity mode",
+  "tooltip.angelofdeath.hint.power": "Shift + Right-Click to change power",
+  "tooltip.angelofdeath.hint.channel": "Hold Right-Click to channel",
+  "tooltip.angelofdeath.hint.place": "Left-Click while channeling to place"
+}
