@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
@@ -24,12 +25,20 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.entity.PartEntity;
 
 public final class SingularityActions {
-    public static final double REACH = 40.0D;
+    /** Placement reach in blocks. */
+    public static final double REACH = 300.0D;
     public static final int PLACE_COOLDOWN_TICKS = 40;
+    private static final double LOAD_CHECK_STEP = 4.0D;
+    private static final double UNLOADED_MARGIN = 16.0D;
 
     private SingularityActions() {
+    }
+
+    /** Where a placed singularity goes, and the living entity it latches onto (if the ray hit one). */
+    public record Target(Vec3 pos, @Nullable LivingEntity entity) {
     }
 
     public static DamageSource voidSource(ServerLevel level, @Nullable Entity direct, @Nullable Entity causing) {
@@ -76,33 +85,67 @@ public final class SingularityActions {
         entity.hurtMarked = true;
     }
 
-    /** 40-block raycast along the look vector; stops at blocks/entities or at max range in mid-air. */
-    public static Vec3 findTarget(ServerPlayer player) {
+    @Nullable
+    private static LivingEntity resolveLiving(Entity entity) {
+        Entity resolved = entity;
+        if (resolved instanceof PartEntity<?> part) {
+            resolved = part.getParent();
+        }
+        return resolved instanceof LivingEntity living ? living : null;
+    }
+
+    /**
+     * How far along the ray every chunk is loaded. Block raycasts must never run into unloaded chunks, because
+     * asking the level for a block there would force the server to load or generate them.
+     */
+    private static double loadedReach(ServerLevel level, Vec3 eye, Vec3 look) {
+        for (double d = 0.0D; d <= REACH; d += LOAD_CHECK_STEP) {
+            Vec3 p = eye.add(look.scale(d));
+            if (!level.hasChunk(Mth.floor(p.x) >> 4, Mth.floor(p.z) >> 4)) {
+                return Math.max(0.0D, d - LOAD_CHECK_STEP);
+            }
+        }
+        return REACH;
+    }
+
+    /**
+     * 300-block raycast along the look vector. Living entities (including the Ender Dragon, via its parts) are
+     * checked first and win over blocks; otherwise the first block is used, or the end of the ray in mid-air.
+     */
+    public static Target findTarget(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         Vec3 end = eye.add(look.scale(REACH));
-        double distance = REACH;
-
-        BlockHitResult blockHit = level.clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE, player));
-        if (blockHit.getType() != HitResult.Type.MISS) {
-            distance = eye.distanceTo(blockHit.getLocation());
-        }
 
         AABB search = player.getBoundingBox().expandTowards(look.scale(REACH)).inflate(1.0D);
-        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player, eye, end, search,
-                e -> !e.isSpectator() && e.isPickable(), REACH * REACH);
+        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player, eye, end, search, e -> {
+            if (e.isSpectator() || !e.isPickable()) {
+                return false;
+            }
+            LivingEntity living = resolveLiving(e);
+            return living != null && living != player;
+        }, REACH * REACH);
         if (entityHit != null) {
-            double entityDistance = eye.distanceTo(entityHit.getLocation());
-            if (entityDistance < distance) {
-                distance = entityDistance;
+            LivingEntity living = resolveLiving(entityHit.getEntity());
+            if (living != null) {
+                return new Target(living.getBoundingBox().getCenter(), living);
             }
         }
 
-        boolean hitSomething = distance < REACH - 1.0E-3D;
-        double placeDistance = hitSomething ? Math.max(1.0D, distance - 1.0D) : REACH;
-        return eye.add(look.scale(placeDistance));
+        double reach = loadedReach(level, eye, look);
+        Vec3 clipEnd = eye.add(look.scale(reach));
+        BlockHitResult blockHit = level.clip(new ClipContext(eye, clipEnd, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, player));
+        double placeDistance;
+        if (blockHit.getType() != HitResult.Type.MISS) {
+            placeDistance = Math.max(1.0D, eye.distanceTo(blockHit.getLocation()) - 1.0D);
+        } else if (reach < REACH) {
+            placeDistance = Math.max(1.0D, reach - UNLOADED_MARGIN);
+        } else {
+            placeDistance = REACH;
+        }
+        return new Target(eye.add(look.scale(placeDistance)), null);
     }
 
     /** Spawns the placed singularity for the player's current mode and power, stops channeling, applies cooldown. */
@@ -110,14 +153,17 @@ public final class SingularityActions {
         ServerLevel level = player.serverLevel();
         int mode = AngelOfDeathWeaponItem.getMode(weapon);
         int power = AngelOfDeathWeaponItem.getPower(weapon);
-        Vec3 pos = findTarget(player);
+        Target target = findTarget(player);
 
         SingularityEntity entity = ModEntities.SINGULARITY.get().create(level);
         if (entity == null) {
             return;
         }
         entity.configure(mode, power, player.getUUID());
-        entity.setPos(pos);
+        entity.setPos(target.pos());
+        if (target.entity() != null) {
+            entity.setAttachedTarget(target.entity().getUUID());
+        }
         level.addFreshEntity(entity);
 
         ChannelHandler.releaseHeldFreeze(player);
@@ -130,7 +176,7 @@ public final class SingularityActions {
             default -> 0.6F;
         };
         playSound(level, player.position(), SoundEvents.LIGHTNING_BOLT_IMPACT, 1.2F, pitch);
-        playSound(level, pos, SoundEvents.END_PORTAL_SPAWN, 1.5F, pitch);
+        playSound(level, target.pos(), SoundEvents.END_PORTAL_SPAWN, 1.5F, pitch);
     }
 
     /** Handles the PlaceSingularityPayload (left-click while holding right-click). */

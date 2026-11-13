@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import org.joml.Quaternionf;
 
 public class SingularityRenderer extends EntityRenderer<SingularityEntity> {
@@ -33,6 +34,18 @@ public class SingularityRenderer extends EntityRenderer<SingularityEntity> {
         Quaternionf cameraOrientation = this.entityRenderDispatcher.cameraOrientation();
 
         poseStack.pushPose();
+        // A latched singularity is drawn at the interpolated center of its host so it glides with the mob
+        // instead of stepping at the network update rate.
+        Entity host = entity.getClientTarget();
+        if (host != null) {
+            double hostX = Mth.lerp(partialTick, host.xOld, host.getX());
+            double hostY = Mth.lerp(partialTick, host.yOld, host.getY()) + host.getBbHeight() * 0.5D;
+            double hostZ = Mth.lerp(partialTick, host.zOld, host.getZ());
+            double selfX = Mth.lerp(partialTick, entity.xOld, entity.getX());
+            double selfY = Mth.lerp(partialTick, entity.yOld, entity.getY());
+            double selfZ = Mth.lerp(partialTick, entity.zOld, entity.getZ());
+            poseStack.translate(hostX - selfX, hostY - selfY, hostZ - selfZ);
+        }
         SingularityVisuals.renderOrb(poseStack, buffer, cameraOrientation, entity.getMode(), radius, time);
         poseStack.popPose();
         super.render(entity, entityYaw, partialTick, poseStack, buffer, packedLight);

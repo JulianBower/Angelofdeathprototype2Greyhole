@@ -56,11 +56,17 @@ public class SingularityEntity extends Entity {
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER =
             SynchedEntityData.defineId(SingularityEntity.class, EntityDataSerializers.OPTIONAL_UUID);
 
+    /** The living entity this singularity is latched onto; the hole follows its bounding-box center. */
+    private static final EntityDataAccessor<Optional<UUID>> ATTACHED_TARGET =
+            SynchedEntityData.defineId(SingularityEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+
     private static final DustParticleOptions BLACK_DUST = new DustParticleOptions(new Vector3f(0.0F, 0.0F, 0.0F), 2.0F);
     private static final DustParticleOptions WHITE_DUST = new DustParticleOptions(new Vector3f(1.0F, 1.0F, 1.0F), 2.0F);
     private static final DustParticleOptions GREY_DUST = new DustParticleOptions(new Vector3f(0.53F, 0.53F, 0.57F), 2.0F);
 
     private int life;
+    @Nullable
+    private Entity clientTarget;
     private final FreezeTracker freezeTracker = new FreezeTracker();
 
     public SingularityEntity(EntityType<? extends SingularityEntity> type, Level level) {
@@ -87,6 +93,56 @@ public class SingularityEntity extends Entity {
         return this.entityData.get(DATA_OWNER).orElse(null);
     }
 
+    public void setAttachedTarget(@Nullable UUID target) {
+        this.entityData.set(ATTACHED_TARGET, Optional.ofNullable(target));
+    }
+
+    @Nullable
+    public UUID getAttachedTargetUUID() {
+        return this.entityData.get(ATTACHED_TARGET).orElse(null);
+    }
+
+    /** Client-side: the latched entity, if it is currently loaded (used by the renderer for smooth following). */
+    @Nullable
+    public Entity getClientTarget() {
+        return this.clientTarget != null && !this.clientTarget.isRemoved() ? this.clientTarget : null;
+    }
+
+    /** Server-side: lock to the center of the latched mob's bounding box every tick, detach if it is gone. */
+    private void followAttachedTarget(ServerLevel level) {
+        UUID id = getAttachedTargetUUID();
+        if (id == null) {
+            return;
+        }
+        Entity target = level.getEntity(id);
+        if (target == null || target.isRemoved() || !target.isAlive()) {
+            setAttachedTarget(null);
+            return;
+        }
+        Vec3 center = target.getBoundingBox().getCenter();
+        this.setPos(center.x, center.y, center.z);
+    }
+
+    private void tickClientAttachment() {
+        UUID id = getAttachedTargetUUID();
+        if (id == null) {
+            this.clientTarget = null;
+            return;
+        }
+        if (this.clientTarget == null || this.clientTarget.isRemoved() || !id.equals(this.clientTarget.getUUID())) {
+            this.clientTarget = null;
+            List<LivingEntity> found = this.level().getEntitiesOfClass(LivingEntity.class,
+                    this.getBoundingBox().inflate(48.0D), e -> id.equals(e.getUUID()));
+            if (!found.isEmpty()) {
+                this.clientTarget = found.get(0);
+            }
+        }
+        if (this.clientTarget != null) {
+            Vec3 center = this.clientTarget.getBoundingBox().getCenter();
+            this.setPos(center.x, center.y, center.z);
+        }
+    }
+
     public int getDuration() {
         return switch (getMode()) {
             case 1 -> WHITE_DURATION;
@@ -100,6 +156,7 @@ public class SingularityEntity extends Entity {
         builder.define(DATA_MODE, 0);
         builder.define(DATA_POWER, 1);
         builder.define(DATA_OWNER, Optional.empty());
+        builder.define(ATTACHED_TARGET, Optional.empty());
     }
 
     @Override
@@ -108,6 +165,7 @@ public class SingularityEntity extends Entity {
         this.entityData.set(DATA_POWER, Mth.clamp(tag.getInt("Power"), 1, 5));
         this.entityData.set(DATA_OWNER, tag.hasUUID("Owner") ? Optional.of(tag.getUUID("Owner")) : Optional.empty());
         this.life = tag.getInt("Life");
+        this.entityData.set(ATTACHED_TARGET, tag.hasUUID("Attached") ? Optional.of(tag.getUUID("Attached")) : Optional.empty());
         this.freezeTracker.load(tag, "Frozen");
     }
 
@@ -120,6 +178,10 @@ public class SingularityEntity extends Entity {
             tag.putUUID("Owner", owner);
         }
         tag.putInt("Life", this.life);
+        UUID attached = getAttachedTargetUUID();
+        if (attached != null) {
+            tag.putUUID("Attached", attached);
+        }
         this.freezeTracker.save(tag, "Frozen");
     }
 
@@ -135,7 +197,7 @@ public class SingularityEntity extends Entity {
 
     @Override
     public boolean shouldRenderAtSqrDistance(double distance) {
-        return distance < 160.0D * 160.0D;
+        return distance < 400.0D * 400.0D;
     }
 
     @Override
@@ -156,9 +218,14 @@ public class SingularityEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
-        if (this.level().isClientSide || !(this.level() instanceof ServerLevel level)) {
+        if (this.level().isClientSide) {
+            tickClientAttachment();
             return;
         }
+        if (!(this.level() instanceof ServerLevel level)) {
+            return;
+        }
+        followAttachedTarget(level);
         this.life++;
         switch (getMode()) {
             case 1 -> tickWhiteHole(level);

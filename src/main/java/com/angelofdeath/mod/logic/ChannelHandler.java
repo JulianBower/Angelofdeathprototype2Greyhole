@@ -202,6 +202,26 @@ public final class ChannelHandler {
 
     // ---------------------------------------------------------------- Freeze cleanup
 
+    /**
+     * The player let go of Right-Click with a Grey Hole in hand: it collapses without leaving anything behind and
+     * every entity or projectile it froze gets its gravity (and AI) back.
+     */
+    public static void dissipateHeld(ServerPlayer player, boolean wasFused) {
+        releaseHeldFreeze(player);
+
+        ServerLevel level = player.serverLevel();
+        Vec3 focal = player.getEyePosition().add(player.getLookAngle().scale(AngelOfDeathWeaponItem.FOCAL_DISTANCE));
+        if (wasFused) {
+            level.sendParticles(GREY_DUST, focal.x, focal.y, focal.z, 40, 0.5D, 0.5D, 0.5D, 0.02D);
+            level.sendParticles(ParticleTypes.ASH, focal.x, focal.y, focal.z, 40, 1.0D, 1.0D, 1.0D, 0.05D);
+            SingularityActions.playSound(level, focal, SoundEvents.BEACON_DEACTIVATE, 1.2F, 0.7F);
+            SingularityActions.playSound(level, focal, SoundEvents.PORTAL_AMBIENT, 0.8F, 1.2F);
+        } else {
+            level.sendParticles(ParticleTypes.SMOKE, focal.x, focal.y, focal.z, 12, 0.3D, 0.3D, 0.3D, 0.02D);
+            SingularityActions.playSound(level, focal, SoundEvents.FIRE_EXTINGUISH, 0.6F, 1.4F);
+        }
+    }
+
     public static void releaseHeldFreeze(ServerPlayer player) {
         FreezeTracker tracker = HELD_FREEZES.remove(player.getUUID());
         if (tracker == null) {

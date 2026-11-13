@@ -16,8 +16,8 @@ public final class ModEntities {
             ENTITY_TYPES.register("singularity", () -> EntityType.Builder
                     .<SingularityEntity>of(SingularityEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
-                    .clientTrackingRange(10)
-                    .updateInterval(10)
+                    .clientTrackingRange(32)
+                    .updateInterval(1)
                     .fireImmune()
                     .build("singularity"));
 

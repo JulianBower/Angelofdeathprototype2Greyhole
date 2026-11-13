@@ -1,6 +1,6 @@
 package com.angelofdeath.mod.item;
 
-import com.angelofdeath.mod.logic.SingularityActions;
+import com.angelofdeath.mod.logic.ChannelHandler;
 import com.angelofdeath.mod.registry.ModDataComponents;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -95,9 +95,11 @@ public class AngelOfDeathWeaponItem extends Item {
         if (level.isClientSide || !(entity instanceof ServerPlayer player)) {
             return;
         }
-        int heldTicks = getUseDuration(stack, entity) - timeLeft;
-        if (getMode(stack) == MODE_GREY_HOLE && heldTicks >= FUSION_TICKS) {
-            SingularityActions.spawnFromPlayer(player, stack);
+        // Releasing Right-Click never places anything. A Grey Hole simply dissipates in hand and everything it
+        // was holding in stasis is released. Placing is Left-Click while holding Right-Click, after the fusion.
+        if (getMode(stack) == MODE_GREY_HOLE) {
+            int heldTicks = getUseDuration(stack, entity) - timeLeft;
+            ChannelHandler.dissipateHeld(player, heldTicks >= FUSION_TICKS);
         }
     }
 
